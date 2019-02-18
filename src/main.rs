@@ -32,7 +32,16 @@ fn main() {
         limit = 50,
     );
 
-    let builds = reqwest::get(&url).unwrap().json::<Vec<Build>>().unwrap();
+    let mut resp = reqwest::get(&url).expect("failed to call circleci api");
+
+    let builds = match resp.json::<Vec<Build>>() {
+        Ok(builds) => builds,
+        Err(e) => {
+            eprintln!("{:?}", e);
+            panic!("failed to parse response as json")
+        }
+    };
+
     let builds = find_builds(builds);
     print_builds(builds);
 }
@@ -54,17 +63,19 @@ fn find_builds(mut builds: Vec<Build>) -> Vec<Build> {
         .filter(|build| repo.find_branch(&build.branch, BranchType::Local).is_ok())
         .collect::<Vec<_>>();
 
-    builds.sort_unstable_by_key(|build| {
-        if &build.branch == "master" {
-            "aaaa".to_string()
-        } else if &build.branch == "staging" {
-            "aaaaaaa".to_string()
-        } else if &build.branch == "develop" {
-            "aaaaaaaaaa".to_string()
-        } else {
-            build.branch.clone()
-        }
-    });
+    builds.sort_unstable_by_key(|build| build.build_num);
+
+    // builds.sort_unstable_by_key(|build| {
+    //     if &build.branch == "master" {
+    //         "aaaa".to_string()
+    //     } else if &build.branch == "staging" {
+    //         "aaaaaaa".to_string()
+    //     } else if &build.branch == "develop" {
+    //         "aaaaaaaaaa".to_string()
+    //     } else {
+    //         build.branch.clone()
+    //     }
+    // });
 
     builds
 }
@@ -73,22 +84,32 @@ fn print_builds(builds: Vec<Build>) {
     let length = builds
         .iter()
         .max_by_key(|build| build.branch.len())
-        .unwrap()
+        .expect("failed to find longest branch")
         .branch
         .len();
 
     for build in builds {
         let branch = pad(&build.branch, length - build.branch.len());
-        let build_num = if build.outcome.failed() {
-            format!("{}", build.build_num)
-        } else {
-            "".to_string()
-        };
+        let build_num = build
+            .outcome
+            .as_ref()
+            .map(|outcome| {
+                if outcome.failed() {
+                    format!("{}", build.build_num)
+                } else {
+                    String::new()
+                }
+            })
+            .unwrap_or_else(String::new);
 
         println!(
             "{branch} {outcome} {build_num}",
             branch = branch,
-            outcome = build.outcome.term_string(),
+            outcome = build
+                .outcome
+                .as_ref()
+                .map(Outcome::term_string)
+                .unwrap_or_else(|| "null".to_string()),
             build_num = build_num,
         );
     }
@@ -106,7 +127,7 @@ fn pad(s: &str, n: usize) -> String {
 struct Build {
     branch: String,
     build_num: i32,
-    outcome: Outcome,
+    outcome: Option<Outcome>,
 }
 
 #[derive(Debug, Deserialize)]
