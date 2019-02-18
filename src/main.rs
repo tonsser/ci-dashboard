@@ -34,13 +34,15 @@ fn main() {
 
     let mut resp = reqwest::get(&url).expect("failed to call circleci api");
 
-    let builds = match resp.json::<Vec<Build>>() {
+    let builds = match resp.json::<Vec<TryBuild>>() {
         Ok(builds) => builds,
         Err(e) => {
             eprintln!("{:?}", e);
             panic!("failed to parse response as json")
         }
     };
+
+    let builds = builds.into_iter().filter_map(TryBuild::into_build).collect::<Vec<_>>();
 
     let builds = find_builds(builds);
     print_builds(builds);
@@ -64,18 +66,6 @@ fn find_builds(mut builds: Vec<Build>) -> Vec<Build> {
         .collect::<Vec<_>>();
 
     builds.sort_unstable_by_key(|build| build.build_num);
-
-    // builds.sort_unstable_by_key(|build| {
-    //     if &build.branch == "master" {
-    //         "aaaa".to_string()
-    //     } else if &build.branch == "staging" {
-    //         "aaaaaaa".to_string()
-    //     } else if &build.branch == "develop" {
-    //         "aaaaaaaaaa".to_string()
-    //     } else {
-    //         build.branch.clone()
-    //     }
-    // });
 
     builds
 }
@@ -109,7 +99,7 @@ fn print_builds(builds: Vec<Build>) {
                 .outcome
                 .as_ref()
                 .map(Outcome::term_string)
-                .unwrap_or_else(|| "null".to_string()),
+                .unwrap_or_else(|| "no outcome (yet)".to_string()),
             build_num = build_num,
         );
     }
@@ -121,6 +111,22 @@ fn pad(s: &str, n: usize) -> String {
         acc = format!(" {}", acc);
     }
     acc
+}
+
+#[derive(Debug, Deserialize)]
+struct TryBuild {
+    branch: Option<String>,
+    build_num: i32,
+    outcome: Option<Outcome>,
+}
+
+impl TryBuild {
+    fn into_build(self) -> Option<Build> {
+        let branch = self.branch?;
+        let build_num = self.build_num;
+        let outcome = self.outcome;
+        Some(Build { branch, build_num, outcome })
+    }
 }
 
 #[derive(Debug, Deserialize)]
