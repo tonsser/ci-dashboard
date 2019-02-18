@@ -1,13 +1,8 @@
 use colored::*;
 use git2::BranchType;
 use git2::Repository;
-use lazy_static::lazy_static;
-use rayon::prelude::*;
-use regex::Regex;
 use reqwest;
 use serde_derive::Deserialize;
-use serde_json::Value;
-use std::collections::HashSet;
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
