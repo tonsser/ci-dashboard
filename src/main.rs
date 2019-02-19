@@ -29,7 +29,7 @@ fn main() {
     let url = format!(
         "https://circleci.com/api/v1.1/recent-builds?circle-token={token}&limit={limit}",
         token = token,
-        limit = 50,
+        limit = 100,
     );
 
     let mut resp = reqwest::get(&url).expect("failed to call circleci api");
