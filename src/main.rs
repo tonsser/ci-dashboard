@@ -42,16 +42,35 @@ fn main() {
         }
     };
 
-    let builds = builds.into_iter().filter_map(TryBuild::into_build).collect::<Vec<_>>();
-
-    let builds = find_builds(builds);
-    print_builds(builds);
-}
-
-fn find_builds(mut builds: Vec<Build>) -> Vec<Build> {
-    builds.sort_unstable_by_key(|build| -build.build_num);
+    let builds = builds
+        .into_iter()
+        .filter_map(TryBuild::into_build)
+        .collect::<Vec<_>>();
 
     let repo = Repository::init(".").expect("No .git folder found");
+
+    let builds = find_builds(builds, &repo);
+    print_builds(builds, repo);
+}
+
+fn current_branch_name(repo: &Repository) -> Result<Option<String>, git2::Error> {
+    let head = repo.head()?;
+
+    for branch in repo.branches(Some(BranchType::Local))? {
+        if let Ok((branch, _)) = branch {
+            if branch.get() == &head {
+                if let Some(name) = branch.name()? {
+                    return Ok(Some(name.to_string()));
+                }
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+fn find_builds(mut builds: Vec<Build>, repo: &Repository) -> Vec<Build> {
+    builds.sort_unstable_by_key(|build| -build.build_num);
 
     let mut builds = builds
         .into_iter()
@@ -70,7 +89,7 @@ fn find_builds(mut builds: Vec<Build>) -> Vec<Build> {
     builds
 }
 
-fn print_builds(builds: Vec<Build>) {
+fn print_builds(builds: Vec<Build>, repo: Repository) {
     let length = builds
         .iter()
         .max_by_key(|build| build.branch.len())
@@ -78,8 +97,19 @@ fn print_builds(builds: Vec<Build>) {
         .branch
         .len();
 
+    let current_branch_name = current_branch_name(&repo)
+        .expect("failed to find current branch")
+        .expect("failed to find current branch");
+
     for build in builds {
-        let branch = pad(&build.branch, length - build.branch.len());
+        let branch = if current_branch_name == build.branch {
+            pad(&build.branch, length - build.branch.len())
+                .magenta()
+                .to_string()
+        } else {
+            pad(&build.branch, length - build.branch.len())
+        };
+
         let build_num = build
             .outcome
             .as_ref()
@@ -125,7 +155,11 @@ impl TryBuild {
         let branch = self.branch?;
         let build_num = self.build_num;
         let outcome = self.outcome;
-        Some(Build { branch, build_num, outcome })
+        Some(Build {
+            branch,
+            build_num,
+            outcome,
+        })
     }
 }
 
