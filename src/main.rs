@@ -15,7 +15,10 @@ struct Cli {
     token: Option<String>,
 }
 
-fn main() {
+type Result<T, E = Box<dyn std::error::Error>> = std::result::Result<T, E>;
+
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Cli::from_args();
 
     let token = if let Some(token) = args.token {
@@ -32,28 +35,24 @@ fn main() {
         limit = 100,
     );
 
-    let mut resp = reqwest::get(&url).expect("failed to call circleci api");
+    let resp: reqwest::Response = reqwest::get(&url).await?;
 
-    let builds = match resp.json::<Vec<TryBuild>>() {
-        Ok(builds) => builds,
-        Err(e) => {
-            eprintln!("{:?}", e);
-            panic!("failed to parse response as json")
-        }
-    };
+    let builds = resp.json::<Vec<TryBuild>>().await?;
 
     let builds = builds
         .into_iter()
         .filter_map(TryBuild::into_build)
         .collect::<Vec<_>>();
 
-    let repo = Repository::init(".").expect("No .git folder found");
+    let repo = Repository::init(".")?;
 
     let builds = find_builds(builds, &repo);
     print_builds(builds, repo);
+
+    Ok(())
 }
 
-fn current_branch_name(repo: &Repository) -> Result<Option<String>, git2::Error> {
+fn current_branch_name(repo: &Repository) -> Result<Option<String>> {
     let head = repo.head()?;
 
     for branch in repo.branches(Some(BranchType::Local))? {
