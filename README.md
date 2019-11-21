@@ -4,7 +4,7 @@ This is a small CLI that shows recent CI builds and whether they passed or faile
 
 ## Setup
 
-1. Install Rust.
+1. Install Rust. Requires at least version 1.39 because it uses async/await.
 2. Install this with `cargo install --force --git https://github.com/tonsser/ci-dashboard.git`.
 
 You also run `cargo install --force --git https://github.com/tonsser/ci-dashboard.git` to update to the latest version.
